@@ -1,82 +1,34 @@
-terraform {
-  required_version = "~> 1.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 4.47"
-    }
-  }
-}
-
-provider "aws" {
-  region = local.region
-}
-
 ################################################################################
-# Common Locals
+# Discovery and Common Locals
 ################################################################################
+data "aws_availability_zones" "available" {}
+data "aws_partition" "current" {}
 
 locals {
-  name   = "reproduction"
-  region = "us-east-1"
+  name        = "reproduction"
+  region      = "us-east-1"
+  eks_version = "1.28"
 
   vpc_cidr = "10.0.0.0/16"
   azs      = slice(data.aws_availability_zones.available.names, 0, 3)
+  part     = data.aws_partition.current.partition
 
   tags = {
     Repository = "github.com/bryantbiggs/how-to-create-reproduction"
   }
 }
 
-data "aws_availability_zones" "available" {}
-
-################################################################################
-# External Role
-################################################################################
-
-data "aws_iam_policy_document" "assume_role_policy" {
-  statement {
-    sid     = "EKSNodeAssumeRole"
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "this" {
-  name_prefix = "${local.name}-"
-
-  assume_role_policy    = data.aws_iam_policy_document.assume_role_policy.json
-  force_detach_policies = true
-
-  tags = local.tags
-}
-
-resource "aws_iam_role_policy_attachment" "this" {
-  for_each = { for k, v in toset([
-    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  ]) : k => v }
-
-  policy_arn = each.value
-  role       = aws_iam_role.this.name
-}
-
 ################################################################################
 # Cluster
+# https://github.com/terraform-aws-modules/terraform-aws-eks/releases
 ################################################################################
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "19.5.1"
+  version = "19.21.0"
 
   cluster_name    = local.name
-  cluster_version = "1.24"
+  cluster_version = local.eks_version
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
@@ -114,7 +66,7 @@ module "eks_managed_node_group" {
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 3.18"
+  version = "~> 5.5.1"
 
   name = local.name
   cidr = local.vpc_cidr
@@ -144,4 +96,60 @@ module "vpc" {
   }
 
   tags = local.tags
+}
+
+################################################################################
+# Provider Versions
+################################################################################
+
+# https://github.com/hashicorp/terraform/releases
+terraform {
+  required_version = "~> 1.0"
+
+  required_providers {
+    # https://github.com/hashicorp/terraform-provider-aws/releases
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.34.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = local.region
+}
+
+################################################################################
+# External Role
+################################################################################
+data "aws_iam_policy_document" "assume_role_policy" {
+  statement {
+    sid     = "EKSNodeAssumeRole"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "this" {
+  name_prefix = "${local.name}-"
+
+  assume_role_policy    = data.aws_iam_policy_document.assume_role_policy.json
+  force_detach_policies = true
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "this" {
+  for_each = { for k, v in toset([
+    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  ]) : k => v }
+
+  policy_arn = each.value
+  role       = aws_iam_role.this.name
 }

@@ -145,9 +145,9 @@ resource "aws_iam_role" "this" {
 
 resource "aws_iam_role_policy_attachment" "this" {
   for_each = { for k, v in toset([
-    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+    "arn:${local.part}:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+    "arn:${local.part}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+    "arn:${local.part}:iam::aws:policy/AmazonEKS_CNI_Policy"
   ]) : k => v }
 
   policy_arn = each.value

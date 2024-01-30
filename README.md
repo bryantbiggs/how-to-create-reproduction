@@ -19,6 +19,10 @@ Reference: https://github.com/terraform-aws-modules/terraform-aws-eks/issues/233
 6. Collect relevant details: outputs, logging, etc.
 7. Provide those details and a link to your forked repo in the issue
 
+When done:
+
+`terraform apply -destroy -auto-approve`
+
 ---
 
 ## Why is it "Proper"?

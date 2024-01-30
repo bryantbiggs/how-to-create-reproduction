@@ -2,12 +2,13 @@
 # Discovery and Common Locals
 ################################################################################
 data "aws_availability_zones" "available" {}
+data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
-  name        = "reproduction"
-  region      = "us-east-1"
-  eks_version = "1.28"
+  name   = "reproduction"
+  region = "us-gov-east-1"
+  eks_version = "1.29"
 
   vpc_cidr = "10.0.0.0/16"
   azs      = slice(data.aws_availability_zones.available.names, 0, 3)
@@ -19,13 +20,13 @@ locals {
 }
 
 ################################################################################
-# Cluster
-# https://github.com/terraform-aws-modules/terraform-aws-eks/releases
+# Cluster: ~8m7s
+# https://registry.terraform.io/modules/terraform-aws-modules/eks/aws/latest
 ################################################################################
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "19.21.0"
+  version = "19.21.0" # https://github.com/terraform-aws-modules/terraform-aws-eks/releases
 
   cluster_name    = local.name
   cluster_version = local.eks_version
@@ -36,9 +37,14 @@ module "eks" {
   tags = local.tags
 }
 
+################################################################################
+# Managed Node Group: ~4m43s
+# https://registry.terraform.io/modules/terraform-aws-modules/eks/aws/latest/submodules/eks-managed-node-group
+################################################################################
+
 module "eks_managed_node_group" {
   source  = "terraform-aws-modules/eks/aws//modules/eks-managed-node-group"
-  version = "19.5.1"
+  version = "19.21.0" # https://github.com/terraform-aws-modules/terraform-aws-eks/releases
 
   name            = "separate"
   cluster_name    = module.eks.cluster_name
@@ -62,11 +68,12 @@ module "eks_managed_node_group" {
 
 ################################################################################
 # VPC
+# https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest
 ################################################################################
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.5.1"
+  version = "5.5.1" # https://github.com/terraform-aws-modules/terraform-aws-vpc/releases
 
   name = local.name
   cidr = local.vpc_cidr
@@ -152,4 +159,32 @@ resource "aws_iam_role_policy_attachment" "this" {
 
   policy_arn = each.value
   role       = aws_iam_role.this.name
+}
+
+################################################################################
+# Optional: Support for eks-blueprints-addons
+# Helps when you need it, doesn't hurt anything if you don't
+################################################################################
+data "aws_eks_cluster_auth" "cluster_auth" {
+  name = module.eks.cluster_name
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    token                  = data.aws_eks_cluster_auth.cluster_auth.token
+  }
+}
+
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    # This requires the awscli to be installed locally where Terraform is executed
+    args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+  }
 }

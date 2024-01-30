@@ -7,7 +7,7 @@ data "aws_partition" "current" {}
 
 locals {
   name        = "reproduction"
-  region      = "us-east-1"
+  region      = "us-gov-east-1"
   eks_version = "1.29"
 
   vpc_cidr = "10.0.0.0/16"
@@ -34,6 +34,18 @@ module "eks" {
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
+
+  aws_auth_roles = [
+    # We need to add in the Karpenter node IAM role for nodes launched by Karpenter
+    {
+      rolearn  = module.eks_blueprints_addons.karpenter.node_iam_role_arn
+      username = "system:node:{{EC2PrivateDNSName}}"
+      groups = [
+        "system:bootstrappers",
+        "system:nodes",
+      ]
+    },
+  ]
 
   tags = local.tags
 }

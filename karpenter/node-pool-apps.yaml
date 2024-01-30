@@ -35,7 +35,7 @@ metadata:
   name: default
 spec:
   amiFamily: AL2 # Amazon Linux 2
-  role: "karpenter-reproduction-20240126165825434100000005"
+  role: "karpenter-reproduction-2024013019241487490000000e"
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: "reproduction"

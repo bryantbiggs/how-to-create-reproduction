@@ -105,7 +105,11 @@ module "vpc" {
   manage_default_route_table    = true
   default_route_table_tags      = { Name = "${local.name}-default" }
   manage_default_security_group = true
-  default_security_group_tags   = { Name = "${local.name}-default" }
+
+  default_security_group_tags = {
+    Name                     = "${local.name}-default",
+    "karpenter.sh/discovery" = local.name
+  }
 
   public_subnet_tags = {
     "kubernetes.io/role/elb" = 1
@@ -113,6 +117,7 @@ module "vpc" {
 
   private_subnet_tags = {
     "kubernetes.io/role/internal-elb" = 1
+    "karpenter.sh/discovery"          = local.name
   }
 
   tags = local.tags

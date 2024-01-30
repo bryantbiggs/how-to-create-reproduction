@@ -6,8 +6,8 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
-  name   = "reproduction"
-  region = "us-gov-east-1"
+  name        = "reproduction"
+  region      = "us-east-1"
   eks_version = "1.29"
 
   vpc_cidr = "10.0.0.0/16"
@@ -28,8 +28,9 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "19.21.0" # https://github.com/terraform-aws-modules/terraform-aws-eks/releases
 
-  cluster_name    = local.name
-  cluster_version = local.eks_version
+  cluster_name                   = local.name
+  cluster_version                = local.eks_version
+  cluster_endpoint_public_access = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets

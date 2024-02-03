@@ -28,6 +28,7 @@ spec:
   disruption:
     consolidationPolicy: WhenUnderutilized
     expireAfter: 720h # 30 * 24h = 720h
+
 ---
 apiVersion: karpenter.k8s.aws/v1beta1
 kind: EC2NodeClass
@@ -35,6 +36,15 @@ metadata:
   name: default
 spec:
   amiFamily: AL2 # Amazon Linux 2
+  amiSelectorTerms:
+    - id: ami-040d04b7b6b4ee64a
+    - name: eks-tester
+    # Select on any AMI that has both the "karpenter.sh/discovery: ${CLUSTER_NAME}" tag
+    # AND the "environment: test" tag OR any AMI with the "my-ami" name
+    # OR any AMI with ID "ami-123"
+    - tags:
+        karpenter.sh/discovery: "reproduction"
+        kubernetes:io/arch: "x86_64"
   role: "karpenter-reproduction-2024013019241487490000000e"
   subnetSelectorTerms:
     - tags:

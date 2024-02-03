@@ -96,9 +96,10 @@ module "vpc" {
   public_subnets  = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 48)]
   intra_subnets   = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 52)]
 
-  enable_nat_gateway     = true
-  single_nat_gateway     = true
-  one_nat_gateway_per_az = false
+  map_public_ip_on_launch = true
+  enable_nat_gateway      = true
+  single_nat_gateway      = true
+  one_nat_gateway_per_az  = false
 
   manage_default_network_acl    = true
   default_network_acl_tags      = { Name = "${local.name}-default" }
@@ -113,11 +114,11 @@ module "vpc" {
 
   public_subnet_tags = {
     "kubernetes.io/role/elb" = 1
+    "karpenter.sh/discovery" = local.name
   }
 
   private_subnet_tags = {
     "kubernetes.io/role/internal-elb" = 1
-    "karpenter.sh/discovery"          = local.name
   }
 
   tags = local.tags
@@ -172,7 +173,8 @@ resource "aws_iam_role_policy_attachment" "this" {
   for_each = { for k, v in toset([
     "arn:${local.part}:iam::aws:policy/AmazonEKSWorkerNodePolicy",
     "arn:${local.part}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-    "arn:${local.part}:iam::aws:policy/AmazonEKS_CNI_Policy"
+    "arn:${local.part}:iam::aws:policy/AmazonEKS_CNI_Policy",
+    "arn:${local.part}:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
   ]) : k => v }
 
   policy_arn = each.value
@@ -206,3 +208,31 @@ provider "kubernetes" {
     args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
   }
 }
+
+/*
+  ----------------------------------------------------------------------------------------------------------------------
+                 ONLY USE FOR EMERGENCIES
+  1. Get your current IP: echo "$(curl -s4 icanhazip.com)/32"
+  2. Uncomment the security_group resource below
+  3. Add your IP to the ingress rule
+  4. terraform apply -no-color -auto-approve
+  ----------------------------------------------------------------------------------------------------------------------
+*/
+resource "aws_vpc_security_group_ingress_rule" "allow_ssh_ipv4" {
+  security_group_id = module.vpc.default_security_group_id
+  description       = "Allow SSH inbound from home"
+  cidr_ipv4         = "23.242.220.131/32"
+  #cidr_ipv6         = "2603:8000:3e00:da:6c35:ef4e:f00a:5e51"
+  from_port         = 22
+  to_port           = 22
+  ip_protocol       = "tcp"
+}
+#resource "aws_vpc_security_group_ingress_rule" "allow_icmp_ipv4" {
+#  security_group_id = module.vpc.default_security_group_id
+#  description       = "Allow ICMP/PING inbound from home"
+#  cidr_ipv4         = "107.184.161.99/32"
+#  #cidr_ipv6         = "2603:8000:3e00:da:6c35:ef4e:f00a:5e51"
+#  from_port         = 8
+#  to_port           = 0
+#  ip_protocol       = "icmp"
+#}

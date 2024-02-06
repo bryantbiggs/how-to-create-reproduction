@@ -2,13 +2,27 @@ module "eks_blueprints_addons" {
   source  = "aws-ia/eks-blueprints-addons/aws"
   version = "~> 1.13.0"
 
+  # --------------------------------------------------------------------------------------------------------------------
+
   enable_karpenter                           = true
   karpenter_enable_instance_profile_creation = true
+  karpenter_enable_spot_termination          = true
+
+  karpenter_node = {
+    iam_role_use_name_prefix = true
+  }
+
   # Added configuration show below
   karpenter = {
+    chart_version   = "v0.33.2"
     irsa_tag_key    = "aws:ResourceTag/kubernetes.io/cluster/reproduction"
     irsa_tag_values = ["*"]
+    values = [
+      file("${path.module}/karpenter/values.yaml")
+    ]
   }
+
+  # --------------------------------------------------------------------------------------------------------------------
 
   enable_metrics_server = true
 

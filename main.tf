@@ -143,6 +143,7 @@ terraform {
 
 provider "aws" {
   region = local.region
+  alias  = "virginia"
 }
 
 ################################################################################
@@ -214,23 +215,24 @@ provider "kubernetes" {
                  ONLY USE FOR EMERGENCIES
   1. Get your current IP: echo "$(curl -s4 icanhazip.com)/32"
   2. Uncomment the security_group resource below
-  3. Add your IP to the ingress rule
+  3. Replace $myHomeIPAddr with Add your IP
   4. terraform apply -no-color -auto-approve
   ----------------------------------------------------------------------------------------------------------------------
 */
-resource "aws_vpc_security_group_ingress_rule" "allow_ssh_ipv4" {
-  security_group_id = module.vpc.default_security_group_id
-  description       = "Allow SSH inbound from home"
-  cidr_ipv4         = "23.242.220.131/32"
-  #cidr_ipv6         = "2603:8000:3e00:da:6c35:ef4e:f00a:5e51"
-  from_port         = 22
-  to_port           = 22
-  ip_protocol       = "tcp"
-}
+#resource "aws_vpc_security_group_ingress_rule" "allow_ssh_ipv4" {
+#  security_group_id = module.vpc.default_security_group_id
+#  description       = "Allow SSH inbound from home"
+#  cidr_ipv4         = "${officeIPAddr}/32"
+#  #cidr_ipv6         = "2603:8000:3e00:da:6c35:ef4e:f00a:5e51"
+#  from_port   = 22
+#  to_port     = 22
+#  ip_protocol = "tcp"
+#}
+
 #resource "aws_vpc_security_group_ingress_rule" "allow_icmp_ipv4" {
 #  security_group_id = module.vpc.default_security_group_id
 #  description       = "Allow ICMP/PING inbound from home"
-#  cidr_ipv4         = "107.184.161.99/32"
+#  cidr_ipv4         = "${officeIPAddr}/32"
 #  #cidr_ipv6         = "2603:8000:3e00:da:6c35:ef4e:f00a:5e51"
 #  from_port         = 8
 #  to_port           = 0

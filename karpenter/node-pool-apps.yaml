@@ -53,7 +53,7 @@ spec:
   #  - tags:
   #      karpenter.sh/discovery: "reproduction"
   #      kubernetes:io/arch: "x86_64"
-  role: "karpenter-reproduction-20240215012437180200000001"
+  role: "karpenter-reproduction"
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: "reproduction"

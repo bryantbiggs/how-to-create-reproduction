@@ -9,7 +9,7 @@ module "eks_blueprints_addons" {
   karpenter_enable_spot_termination          = true
 
   karpenter_node = {
-    iam_role_use_name_prefix = true
+    iam_role_use_name_prefix = false
     # false: karpenter_node_iam_role_name = "karpenter-reproduction"
     # true:  karpenter_node_iam_role_name = "karpenter-reproduction-20240215002156918200000001"
   }

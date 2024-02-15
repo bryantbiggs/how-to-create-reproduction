@@ -124,7 +124,7 @@ module "vpc" {
 }
 
 ################################################################################
-# Provider Versions
+# aws-auth ConfigMap management
 ################################################################################
 module "aws_auth" {
   source  = "terraform-aws-modules/eks/aws//modules/aws-auth"

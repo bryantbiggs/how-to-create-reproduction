@@ -13,6 +13,7 @@ locals {
   vpc_cidr = "10.0.0.0/16"
   azs      = slice(data.aws_availability_zones.available.names, 0, 3)
   part     = data.aws_partition.current.partition
+  user_arn = split("/", data.aws_caller_identity.current.arn)[0]
 
   tags = {
     Repository = "github.com/bryantbiggs/how-to-create-reproduction"
@@ -26,7 +27,7 @@ locals {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "19.21.0" # https://github.com/terraform-aws-modules/terraform-aws-eks/releases
+  version = "20.2.1" # https://github.com/terraform-aws-modules/terraform-aws-eks/releases
 
   cluster_name                   = local.name
   cluster_version                = local.eks_version
@@ -34,20 +35,17 @@ module "eks" {
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
+  control_plane_subnet_ids = module.vpc.intra_subnets
+  cluster_ip_family = "ipv4"
+  create_cni_ipv6_iam_policy = false
 
-  aws_auth_roles = [
-    # We need to add in the Karpenter node IAM role for nodes launched by Karpenter
-    {
-      rolearn  = module.eks_blueprints_addons.karpenter.node_iam_role_arn
-      username = "system:node:{{EC2PrivateDNSName}}"
-      groups = [
-        "system:bootstrappers",
-        "system:nodes",
-      ]
-    },
-  ]
+  # Cluster Access: Break-Glass Accounts
+  authentication_mode                      = "API_AND_CONFIG_MAP"
+  enable_cluster_creator_admin_permissions = true
 
-  tags = local.tags
+  tags = merge(local.tags, {
+    "karpenter.sh/discovery" = local.name
+  })
 }
 
 ################################################################################
@@ -57,9 +55,9 @@ module "eks" {
 
 module "eks_managed_node_group" {
   source  = "terraform-aws-modules/eks/aws//modules/eks-managed-node-group"
-  version = "19.21.0" # https://github.com/terraform-aws-modules/terraform-aws-eks/releases
+  version = "20.2.1" # https://github.com/terraform-aws-modules/terraform-aws-eks/releases
 
-  name            = "separate"
+  name            = "${local.name}-mng"
   cluster_name    = module.eks.cluster_name
   cluster_version = module.eks.cluster_version
 
@@ -86,7 +84,7 @@ module "eks_managed_node_group" {
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "5.5.1" # https://github.com/terraform-aws-modules/terraform-aws-vpc/releases
+  version = "~> 5.5.2" # https://github.com/terraform-aws-modules/terraform-aws-vpc/releases
 
   name = local.name
   cidr = local.vpc_cidr
@@ -119,6 +117,7 @@ module "vpc" {
 
   private_subnet_tags = {
     "kubernetes.io/role/internal-elb" = 1
+    "karpenter.sh/discovery"          = local.name
   }
 
   tags = local.tags
@@ -127,23 +126,32 @@ module "vpc" {
 ################################################################################
 # Provider Versions
 ################################################################################
+module "aws_auth" {
+  source  = "terraform-aws-modules/eks/aws//modules/aws-auth"
+  version = "20.2.1"
 
-# https://github.com/hashicorp/terraform/releases
-terraform {
-  required_version = "~> 1.0"
+  # When all else fails, there is still direct access.
+  manage_aws_auth_configmap = true
 
-  required_providers {
-    # https://github.com/hashicorp/terraform-provider-aws/releases
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.34.0"
-    }
-  }
-}
+  aws_auth_roles = [
+    # We need to add in the Karpenter node IAM role for nodes launched by Karpenter
+    {
+      rolearn  = module.eks_blueprints_addons.karpenter.node_iam_role_arn
+      username = "system:node:{{EC2PrivateDNSName}}"
+      groups = [
+        "system:bootstrappers",
+        "system:nodes",
+      ]
+    },
+  ]
 
-provider "aws" {
-  region = local.region
-  alias  = "virginia"
+  aws_auth_users = [
+    {
+      userarn  = "${local.user_arn}/tthomas@vivsoft.io"
+      username = "tthomas@vivsoft.io"
+      groups   = ["system:masters"]
+    },
+  ]
 }
 
 ################################################################################
@@ -183,13 +191,42 @@ resource "aws_iam_role_policy_attachment" "this" {
 }
 
 ################################################################################
+# Provider Versions
+################################################################################
+
+# https://github.com/hashicorp/terraform/releases
+terraform {
+  required_version = "~> 1.0"
+
+  required_providers {
+    # https://github.com/hashicorp/terraform-provider-aws/releases
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.34.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.25.2"
+    }
+  }
+}
+
+provider "aws" {
+  region = local.region
+  alias  = "virginia"
+}
+
+################################################################################
 # Optional: Support for eks-blueprints-addons
 # Helps when you need it, doesn't hurt anything if you don't
 ################################################################################
+# Discover the Cluster Token for AuthN
 data "aws_eks_cluster_auth" "cluster_auth" {
   name = module.eks.cluster_name
 }
 
+### AuthN: Helm <> EKS
+# AuthN so Helm Can Install Charts
 provider "helm" {
   kubernetes {
     host                   = module.eks.cluster_endpoint
@@ -198,12 +235,15 @@ provider "helm" {
   }
 }
 
+### AuthN: Terraform <> EKS
+# https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs
+# https://github.com/hashicorp/terraform-provider-kubernetes/releases
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
 
   exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
+    api_version = "client.authentication.k8s.io/v1"
     command     = "aws"
     # This requires the awscli to be installed locally where Terraform is executed
     args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]

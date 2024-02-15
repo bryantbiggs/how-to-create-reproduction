@@ -13,3 +13,7 @@ output "reproduction-account" {
 output "reproduction-part" {
   value = local.part
 }
+
+output "karpenter_node_iam_role_name" {
+  value = module.eks_blueprints_addons.karpenter.node_iam_role_name
+}

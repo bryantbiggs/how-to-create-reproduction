@@ -14,7 +14,7 @@ spec:
           values: ["linux"]
         - key: karpenter.sh/capacity-type
           operator: In
-          values: ["on-demand"]
+          values: ["spot"] #, "on-demand"]
         - key: karpenter.k8s.aws/instance-category
           operator: In
           values: ["c", "m", "r"]
@@ -35,6 +35,15 @@ metadata:
   name: default
 spec:
   amiFamily: AL2 # Amazon Linux 2
+  #userData: |
+  #  #!/bin/bash
+  #  mkdir -p ~root/.ssh/
+  #  touch ~root/.ssh/authorized_keys
+  #  cat >> ~root/.ssh/authorized_keys <<EOF
+  #  {{ insertFile "karpenter/test/id_ed25519.pub" | indent 4  }}
+  #  EOF
+  #  chmod -R go-w ~root/.ssh/authorized_keys
+  #  chown -R root ~root/.ssh
   #amiSelectorTerms:
   #  - id: ami-040d04b7b6b4ee64a
   #  - name: eks-tester
@@ -44,7 +53,7 @@ spec:
   #  - tags:
   #      karpenter.sh/discovery: "reproduction"
   #      kubernetes:io/arch: "x86_64"
-  role: "karpenter-reproduction-2024013019241487490000000e"
+  role: "karpenter-reproduction-20240215012437180200000001"
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: "reproduction"

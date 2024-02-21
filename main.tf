@@ -82,6 +82,49 @@ module "eks_managed_node_group" {
 # https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest
 ################################################################################
 
+module "eks_blueprints_addons" {
+  source  = "aws-ia/eks-blueprints-addons/aws"
+  version = "~> 1.15.1"
+
+  # --------------------------------------------------------------------------------------------------------------------
+  # Uncomment this block to test Karpenter
+  # ALSO:
+  #   * Uncomment the aws_auth_roles block below
+  #   * Uncomment the related Output at the bottom
+#  enable_karpenter                           = true
+#  karpenter_enable_instance_profile_creation = true
+#  karpenter_enable_spot_termination          = true
+#
+#  karpenter_node = {
+#    iam_role_use_name_prefix = false
+#  }
+#
+#  # Added configuration show below
+#  karpenter = {
+#    chart_version   = "v0.34.0"
+#    irsa_tag_key    = "aws:ResourceTag/kubernetes.io/cluster/reproduction"
+#    irsa_tag_values = ["*"]
+#    values = [
+#      file("${path.module}/karpenter/values.yaml")
+#    ]
+#  }
+
+  # --------------------------------------------------------------------------------------------------------------------
+
+  enable_metrics_server = false
+
+  cluster_name      = module.eks.cluster_name
+  cluster_endpoint  = module.eks.cluster_endpoint
+  cluster_version   = module.eks.cluster_version
+  oidc_provider_arn = module.eks.oidc_provider_arn
+}
+
+
+################################################################################
+# VPC
+# https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest
+################################################################################
+
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.5.2" # https://github.com/terraform-aws-modules/terraform-aws-vpc/releases
@@ -133,17 +176,17 @@ module "aws_auth" {
   # When all else fails, there is still direct access.
   manage_aws_auth_configmap = true
 
-  aws_auth_roles = [
-    # We need to add in the Karpenter node IAM role for nodes launched by Karpenter
-    {
-      rolearn  = module.eks_blueprints_addons.karpenter.node_iam_role_arn
-      username = "system:node:{{EC2PrivateDNSName}}"
-      groups = [
-        "system:bootstrappers",
-        "system:nodes",
-      ]
-    },
-  ]
+#  aws_auth_roles = [
+#    # We need to add in the Karpenter node IAM role for nodes launched by Karpenter
+#    {
+#      rolearn  = module.eks_blueprints_addons.karpenter.node_iam_role_arn
+#      username = "system:node:{{EC2PrivateDNSName}}"
+#      groups = [
+#        "system:bootstrappers",
+#        "system:nodes",
+#      ]
+#    },
+#  ]
 
   aws_auth_users = [
     {
@@ -277,4 +320,27 @@ provider "kubernetes" {
 #  from_port         = 8
 #  to_port           = 0
 #  ip_protocol       = "icmp"
+#}
+
+################################################################################
+# Outputs
+################################################################################
+output "reproduction-region" {
+  value = local.region
+}
+
+output "reproduction-project" {
+  value = local.name
+}
+
+output "reproduction-account" {
+  value = data.aws_caller_identity.current.account_id
+}
+
+output "reproduction-part" {
+  value = local.part
+}
+
+#output "karpenter_node_iam_role_name" {
+#  value = module.eks_blueprints_addons.karpenter.node_iam_role_name
 #}

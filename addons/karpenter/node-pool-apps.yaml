@@ -1,0 +1,62 @@
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot"] #, "on-demand"]
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r"]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["2"]
+      nodeClassRef:
+        name: default
+  limits:
+    cpu: 1000
+  disruption:
+    consolidationPolicy: WhenUnderutilized
+    expireAfter: 720h # 30 * 24h = 720h
+---
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2 # Amazon Linux 2
+  #userData: |
+  #  #!/bin/bash
+  #  mkdir -p ~root/.ssh/
+  #  touch ~root/.ssh/authorized_keys
+  #  cat >> ~root/.ssh/authorized_keys <<EOF
+  #  {{ insertFile "karpenter/test/id_ed25519.pub" | indent 4  }}
+  #  EOF
+  #  chmod -R go-w ~root/.ssh/authorized_keys
+  #  chown -R root ~root/.ssh
+  #amiSelectorTerms:
+  #  - id: ami-040d04b7b6b4ee64a
+  #  - name: eks-tester
+  #  # Select on any AMI that has both the "karpenter.sh/discovery: ${CLUSTER_NAME}" tag
+  #  # AND the "environment: test" tag OR any AMI with the "my-ami" name
+  #  # OR any AMI with ID "ami-123"
+  #  - tags:
+  #      karpenter.sh/discovery: "reproduction"
+  #      kubernetes:io/arch: "x86_64"
+  role: "karpenter-reproduction"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "reproduction"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "reproduction"
